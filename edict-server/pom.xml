@@ -18,7 +18,7 @@
     <packaging>jar</packaging>
     
     <name>Edict Subtitle Editor</name>
-    <description>字幕编辑工具 Java 后端</description>
+    <description>Java 后端</description>
     
     <properties>
         <java.version>1.8</java.version>

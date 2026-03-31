@@ -13,6 +13,11 @@
 </p>
 
 <p align="center">
+  <img src="./assets/pic/045760c0-6a40-4445-a209-7caa6be787ab.png" width="45%" alt="Edict Screenshot 1">
+  <img src="./assets/pic/60e5793c-5b9e-43f1-955b-5ad2d57ddd71.png" width="45%" alt="Edict Screenshot 2">
+</p>
+
+<p align="center">
   <strong>基于 OpenClaw 的 3D 可视化 AI Agent 管理系统</strong>
 </p>
 
