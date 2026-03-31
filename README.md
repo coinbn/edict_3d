@@ -8,12 +8,12 @@
 </p>
 
 <p align="center">
-  <strong>基于 OpenClaw 的 3D 可视化 AI Agent 管理系统</strong>
+  <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo1.mp4"><img src="https://img.shields.io/badge/📹%20演示视频%201-red?style=for-the-badge"></a>
+  <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo2.mp4"><img src="https://img.shields.io/badge/📹%20演示视频%202-orange?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  📹 <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo1.mp4">演示视频 1</a> • 
-  <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo2.mp4">演示视频 2</a>
+  <strong>基于 OpenClaw 的 3D 可视化 AI Agent 管理系统</strong>
 </p>
 
 ---
