@@ -11,6 +11,11 @@
   <strong>基于 OpenClaw 的 3D 可视化 AI Agent 管理系统</strong>
 </p>
 
+<p align="center">
+  📹 <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo1.mp4">演示视频 1</a> • 
+  <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo2.mp4">演示视频 2</a>
+</p>
+
 ---
 
 ## 📖 项目简介

@@ -12,6 +12,11 @@
 </p>
 
 <p align="center">
+  📹 <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo1.mp4">Demo Video 1</a> • 
+  <a href="https://github.com/coinbn/edict_3d/blob/main/assets/videos/demo2.mp4">Demo Video 2</a>
+</p>
+
+<p align="center">
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#quick-start">Quick Start</a> •
