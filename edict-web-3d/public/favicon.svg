@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- 紫色背景圆角矩形 -->
+  <rect x="5" y="5" width="90" height="90" rx="18" ry="18" fill="url(#bg)"/>
+  
+  <!-- 白色 E 字母 (Ribbon 风格) -->
+  <g fill="#ffffff">
+    <!-- E 的垂直主干 -->
+    <polygon points="25,20 35,20 35,80 25,80"/>
+    
+    <!-- E 的顶部横条 (斜切设计) -->
+    <polygon points="25,20 70,20 65,30 25,30"/>
+    
+    <!-- E 的中间横条 (斜切设计) -->
+    <polygon points="25,45 60,45 55,55 25,55"/>
+    
+    <!-- E 的底部横条 (斜切设计) -->
+    <polygon points="25,70 70,70 65,80 25,80"/>
+  </g>
+  
+  <!-- 高光效果 -->
+  <rect x="5" y="5" width="90" height="45" rx="18" ry="18" fill="url(#highlight)" opacity="0.1"/>
+  
+  <!-- 阴影效果 -->
+  <rect x="8" y="85" width="84" height="8" rx="4" ry="4" fill="#000000" opacity="0.2"/>
+</svg>

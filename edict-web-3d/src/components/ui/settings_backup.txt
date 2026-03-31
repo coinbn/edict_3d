@@ -1,0 +1,174 @@
+function SettingsView() {
+  const { fetchAgents, syncAgents, loading, setApiBase, ui } = useStore()
+  const [apiInput, setApiInput] = useState('http://localhost:8080/api')
+  const [activeTab, setActiveTab] = useState('api')
+  
+  // 子菜单配置
+  const settingTabs = [
+    { key: 'api', label: 'API配置', icon: '🔗' },
+    { key: 'display', label: '显示设置', icon: '🎨' },
+    { key: 'gateway', label: 'Gateway', icon: '🌐' },
+    { key: 'services', label: '服务管理', icon: '⚙️' },
+    { key: 'channels', label: '消息渠道', icon: '💬' },
+    { key: 'logviewer', label: '日志查看', icon: '📜' },
+    { key: 'memory', label: '记忆管理', icon: '🧠' },
+  ]
+  
+  // 获取当前激活的标签信息
+  const activeTabInfo = settingTabs.find(t => t.key === activeTab)
+  
+  const handleSync = async () => {
+    await syncAgents()
+    await fetchAgents()
+  }
+  
+  const handleApiSave = () => {
+    setApiBase(apiInput)
+    fetchAgents()
+  }
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="h-full overflow-y-auto px-8 py-4"
+    >
+      <h2 className="text-2xl font-bold text-white mb-4">⚙️ 系统设置</h2>
+      
+      {/* 下拉菜单 */}
+      <div className="relative inline-block mb-6">
+        <select
+          value={activeTab}
+          onChange={(e) => setActiveTab(e.target.value)}
+          className="appearance-none bg-gradient-to-r from-indigo-950 via-purple-950 to-cyan-950 border border-white/20 rounded-xl px-6 py-3 pr-12 text-white font-medium cursor-pointer hover:border-cyan-500/50 focus:outline-none focus:border-cyan-500/50 transition-all shadow-lg"
+        >
+          {settingTabs.map(tab => (
+            <option key={tab.key} value={tab.key} className="bg-gray-900">
+              {tab.icon} {tab.label}
+            </option>
+          ))}
+        </select>
+        {/* 自定义下拉箭头 */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/60">
+          ▼
+        </div>
+      </div>
+      
+      {/* 内容区域 */}
+      <div className="max-w-3xl space-y-6">
+          {/* API 配置 */}
+          {activeTab === 'api' && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg text-white mb-4">🔗 API 配置</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-white/60">API 地址</label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      value={apiInput}
+                      onChange={(e) => setApiInput(e.target.value)}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <button
+                      onClick={handleApiSave}
+                      className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 rounded-lg hover:bg-cyan-500/30"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSync}
+                    disabled={loading}
+                    className="px-4 py-2 bg-purple-500/20 border border-purple-500/50 text-purple-400 rounded-lg hover:bg-purple-500/30 disabled:opacity-50"
+                  >
+                    {loading ? '同步中...' : '🔄 同步 Agent'}
+                  </button>
+                  <button
+                    onClick={() => fetchAgents()}
+                    disabled={loading}
+                    className="px-4 py-2 bg-white/10 border border-white/20 text-white/60 rounded-lg hover:bg-white/20"
+                  >
+                    刷新
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Gateway 配置 */}
+          {activeTab === 'gateway' && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg text-white mb-4">🌐 Gateway 配置</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-white/60">Gateway 地址</label>
+                  <input
+                    type="text"
+                    defaultValue="http://localhost:18789"
+                    className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-white/60">访问 Token</label>
+                  <input
+                    type="password"
+                    defaultValue=""
+                    placeholder="可选"
+                    className="w-full mt-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+                <button className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 rounded-lg hover:bg-cyan-500/30">
+                  保存
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 显示设置 */}
+          {activeTab === 'display' && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg text-white mb-4">🎨 显示设置</h3>
+              <div className="space-y-4">
+                <label className="flex items-center justify-between">
+                  <span className="text-white/60">自动旋转</span>
+                  <input type="checkbox" defaultChecked className="w-5 h-5 accent-cyan-500" />
+                </label>
+                <label className="flex items-center justify-between">
+                  <span className="text-white/60">显示粒子</span>
+                  <input type="checkbox" defaultChecked className="w-5 h-5 accent-cyan-500" />
+                </label>
+                <label className="flex items-center justify-between">
+                  <span className="text-white/60">显示网格</span>
+                  <input type="checkbox" defaultChecked className="w-5 h-5 accent-cyan-500" />
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* 服务管理 */}
+          {activeTab === 'services' && (
+            <ServiceManagerView />
+          )}
+
+          {/* 消息渠道 */}
+          {activeTab === 'channels' && (
+            <ChannelsView />
+          )}
+
+          {/* 日志查看 */}
+          {activeTab === 'logviewer' && (
+            <LogViewerView />
+          )}
+
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// Agent 详情面板

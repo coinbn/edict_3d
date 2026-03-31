@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: edict-server
+  
+  # 数据源配置
+  datasource:
+    url: jdbc:mysql://localhost:3306/edict?characterEncoding=UTF-8&useUnicode=true&zeroDateTimeBehavior=convertToNull&allowMultiQueries=true&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: YOUR_MYSQL_PASSWORD
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+  
+  # JPA 配置
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  
+  # 文件上传配置
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+
+# 自定义配置
+edict:
+  upload:
+    path: D:/edictNew/uploads
+    video-path: ${edict.upload.path}/video
+    audio-path: ${edict.upload.path}/audio
+    subtitle-path: ${edict.upload.path}/subtitle
+  ffmpeg:
+    # Windows 下 FFmpeg 路径，请根据实际情况修改
+    ffmpeg-path: ffmpeg
+    ffprobe-path: ffprobe
+  terminal:
+    # 终端 WebSocket 工作目录
+    working-dir: D:\edictNew\edict-web-3d
+    # 终端启动命令
+    command: npm run dev
+
+# OpenClaw Gateway 配置
+openclaw:
+  # Gateway 地址
+  gateway-url: http://localhost:3000
+  # 默认模型
+  default-model: kimi-coding/k2p5
+  # 是否启用真实 Agent 调用（false 则使用模拟）
+  enabled: true
+  # 子任务超时时间（秒）
+  subagent-timeout: 300

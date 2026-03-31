@@ -1,0 +1,24 @@
+# 排除前端目录
+edict-web/
+edict-web-bak/
+
+# 排除 node_modules
+node_modules/
+
+# 排除编译产物
+edict-server/target/
+
+# 排除缓存和临时文件
+*.class
+*.log
+*.tmp
+*.bak
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml

@@ -1,0 +1,186 @@
+{
+  "version": "2.0.0",
+  "description": "三省六部 Agent 配置与权限矩阵",
+  "gateway": {
+    "host": "localhost",
+    "port": 8080,
+    "api_base": "/api"
+  },
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "webhook_url": "https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_WEBHOOK_URL",
+      "app_id": "YOUR_APP_ID",
+      "app_secret": "YOUR_APP_SECRET",
+      "entry_agent": "taizi"
+    },
+    "telegram": {
+      "enabled": false,
+      "bot_token": "YOUR_BOT_TOKEN",
+      "entry_agent": "taizi"
+    }
+  },
+  "agents": [
+    {
+      "id": "taizi",
+      "label": "太子",
+      "emoji": "🦞",
+      "role": "东宫太子",
+      "model": "kimi-k2",
+      "description": "皇帝旨意分拣官，负责识别闲聊vs旨意，建立任务并传旨中书省",
+      "allowAgents": ["zhongshu"],
+      "canCall": ["zhongshu"],
+      "skills": ["分拣", "传旨", "协调", "编程", "数据分析"],
+      "workspace": "agents/taizi",
+      "auto_start": true,
+      "priority": 0
+    },
+    {
+      "id": "zhongshu",
+      "label": "中书省",
+      "emoji": "✍️",
+      "role": "中书令",
+      "model": "kimi-k2",
+      "description": "规划官，接旨后分析需求、拆解子任务、起草方案，提交门下省审议",
+      "allowAgents": ["menxia", "shangshu"],
+      "canCall": ["menxia", "shangshu"],
+      "skills": ["起草", "规划", "需求分析"],
+      "workspace": "agents/zhongshu",
+      "auto_start": true,
+      "priority": 1
+    },
+    {
+      "id": "menxia",
+      "label": "门下省",
+      "emoji": "🔍",
+      "role": "侍中",
+      "model": "gpt-4o-mini",
+      "description": "审议官，审查中书方案（可行性、完整性、风险），准奏或封驳",
+      "allowAgents": ["shangshu", "zhongshu"],
+      "canCall": ["shangshu", "zhongshu"],
+      "skills": ["审核", "风险评估", "质量控制"],
+      "workspace": "agents/menxia",
+      "auto_start": true,
+      "priority": 2
+    },
+    {
+      "id": "shangshu",
+      "label": "尚书省",
+      "emoji": "👑",
+      "role": "尚书令",
+      "model": "gpt-4o",
+      "description": "派发官，接到准奏后分析派发给哪个部门，协调六部执行并汇总",
+      "allowAgents": ["libu", "hubu", "bingbu", "xingbu", "gongbu", "libu_hr"],
+      "canCall": ["libu", "hubu", "bingbu", "xingbu", "gongbu", "libu_hr"],
+      "skills": ["派发", "协调", "汇总", "决策"],
+      "workspace": "agents/shangshu",
+      "auto_start": true,
+      "priority": 3
+    },
+    {
+      "id": "libu",
+      "label": "礼部",
+      "emoji": "👥",
+      "role": "礼部尚书",
+      "model": "gpt-4o",
+      "description": "文档编制官，负责文档、报告、说明书的编写",
+      "allowAgents": [],
+      "canCall": [],
+      "skills": ["文档编写", "排版", "写作"],
+      "workspace": "agents/libu",
+      "auto_start": true,
+      "priority": 4
+    },
+    {
+      "id": "hubu",
+      "label": "户部",
+      "emoji": "💰",
+      "role": "户部尚书",
+      "model": "claude-3-5-sonnet",
+      "description": "数据分析官，负责数据处理、分析、可视化",
+      "allowAgents": [],
+      "canCall": [],
+      "skills": ["数据分析", "可视化", "统计"],
+      "workspace": "agents/hubu",
+      "auto_start": true,
+      "priority": 4
+    },
+    {
+      "id": "bingbu",
+      "label": "兵部",
+      "emoji": "⚔️",
+      "role": "兵部尚书",
+      "model": "kimi-k2",
+      "description": "代码实现官，负责代码编写、功能实现",
+      "allowAgents": [],
+      "canCall": [],
+      "skills": ["编程", "代码审查", "架构设计"],
+      "workspace": "agents/bingbu",
+      "auto_start": true,
+      "priority": 4
+    },
+    {
+      "id": "xingbu",
+      "label": "刑部",
+      "emoji": "⚖️",
+      "role": "刑部尚书",
+      "model": "gpt-4o",
+      "description": "测试审查官，负责测试、审查、质量保证",
+      "allowAgents": [],
+      "canCall": [],
+      "skills": ["测试", "审查", "Bug修复"],
+      "workspace": "agents/xingbu",
+      "auto_start": true,
+      "priority": 4
+    },
+    {
+      "id": "gongbu",
+      "label": "工部",
+      "emoji": "🔨",
+      "role": "工部尚书",
+      "model": "claude-3-opus",
+      "description": "基础设施官，负责部署、运维、基础设施",
+      "allowAgents": [],
+      "canCall": [],
+      "skills": ["DevOps", "部署", "运维"],
+      "workspace": "agents/gongbu",
+      "auto_start": true,
+      "priority": 4
+    },
+    {
+      "id": "libu_hr",
+      "label": "吏部",
+      "emoji": "🎓",
+      "role": "吏部尚书",
+      "model": "gpt-4o-mini",
+      "description": "人力资源官，负责Agent管理、绩效统计",
+      "allowAgents": [],
+      "canCall": [],
+      "skills": ["人事管理", "绩效考核", "统计"],
+      "workspace": "agents/libu_hr",
+      "auto_start": true,
+      "priority": 4
+    }
+  ],
+  "state_machine": {
+    "initial": "Pending",
+    "states": ["Pending", "Taizi", "Zhongshu", "Menxia", "Assigned", "Doing", "Next", "Review", "Done", "Cancelled", "Blocked"],
+    "transitions": {
+      "Pending": {"to": "Taizi", "agent": "taizi"},
+      "Taizi": {"to": "Zhongshu", "agent": "zhongshu"},
+      "Zhongshu": {"to": "Menxia", "agent": "menxia"},
+      "Menxia": {"to": "Assigned", "agent": "shangshu"},
+      "Assigned": {"to": "Doing", "agent": null},
+      "Doing": {"to": "Review", "agent": "shangshu"},
+      "Next": {"to": "Doing", "agent": null},
+      "Review": {"to": "Done", "agent": "taizi"}
+    }
+  },
+  "dispatch": {
+    "enabled": true,
+    "auto_dispatch": true,
+    "stall_threshold_sec": 180,
+    "max_retry": 2,
+    "escalation_levels": ["menxia", "shangshu"]
+  }
+}
