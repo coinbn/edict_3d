@@ -43,24 +43,13 @@ public class EdictController {
         String taskId = (String) body.get("taskId");
         Boolean archived = (Boolean) body.get("archived");
         Boolean archiveAllDone = (Boolean) body.get("archiveAllDone");
-        
+
         if (Boolean.TRUE.equals(archiveAllDone)) {
             return taskService.archiveTask(null, true);
         }
         return taskService.archiveTask(taskId, archived);
     }
-    
-    @PostMapping("/create-task")
-    public ActionResultDTO createTask(@RequestBody Map<String, Object> body) {
-        String title = (String) body.get("title");
-        String org = (String) body.get("org");
-        String priority = (String) body.get("priority");
-        String creator = (String) body.get("creator");
-        
-        // 创建任务并自动启动 workflow
-        return taskService.createTaskAndStartWorkflow(title, org, priority, creator);
-    }
-    
+
     // 获取任务列表
     @GetMapping("/tasks")
     public LiveStatusDTO getTasks(

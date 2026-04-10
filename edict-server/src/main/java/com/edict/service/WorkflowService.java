@@ -96,34 +96,11 @@ public class WorkflowService {
     /**
      * 构建太子协调任务
      *
-     * 给 taizi agent 完整的任务信息和协调指令，
-     * 让 taizi 自己通过 OpenClaw CLI 调用其他 agent。
+     * 给 taizi agent 任务ID和旨意内容，
+     * 让 taizi 按自己的 SOUL 流程执行。
      */
     private String buildTaiziTask(String taskId, String taskContent) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("你是太子，负责协调三省六部完成皇上的旨意。\n\n");
-        sb.append("任务ID: ").append(taskId).append("\n");
-        sb.append("皇上旨意: ").append(taskContent).append("\n\n");
-        sb.append("你的职责：\n");
-        sb.append("1. 分析任务内容，判断类型（开发/文档/数据/部署/安全等）\n");
-        sb.append("2. 通过 OpenClaw CLI 调用 agent 执行：\n");
-        sb.append("   - 中书省(zhongshu)：起草执行方案\n");
-        sb.append("   - 门下省(menxia)：审议方案\n");
-        sb.append("   - 尚书省(shangshu)：派发任务到六部\n");
-        sb.append("   - 六部(bingbu/hubu/libu/gongbu/xingbu)：执行具体任务\n\n");
-        sb.append("执行方式：\n");
-        sb.append("- 使用命令: openclaw agent --agent <agentId> --timeout 300 -m \"<任务内容>\"\n");
-        sb.append("- 例如: openclaw agent --agent zhongshu --timeout 300 -m \"任务ID: ").append(taskId).append("，请起草方案\"\n\n");
-        sb.append("任务完成后：\n");
-        sb.append("1. 通过 Python 脚本更新任务进度：\n");
-        sb.append("   python C:\\Users\\admin\\.openclaw\\workspacePa\\taizi\\scripts\\kanban_update.py progress ").append(taskId).append(" <进度说明> <计划>\n\n");
-        sb.append("2. 最终通过以下命令完成任务：\n");
-        sb.append("   python C:\\Users\\admin\\.openclaw\\workspacePa\\taizi\\scripts\\kanban_update.py done ").append(taskId).append(" <输出> <摘要>\n\n");
-        sb.append("注意事项：\n");
-        sb.append("- 根据任务类型选择合适的六部执行\n");
-        sb.append("- 保持流程记录，让皇上能追踪任务进度\n");
-        sb.append("- 如果某环节失败，记录错误并汇报\n");
-        return sb.toString();
+        return "[后端任务] taskId=" + taskId + " 旨意=" + taskContent + " 请按SOUL流程执行并更新进度";
     }
 
     /**

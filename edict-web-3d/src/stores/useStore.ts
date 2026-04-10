@@ -131,7 +131,6 @@ interface AppState {
   executeTask: (task: string) => Promise<any>
   syncAgents: () => Promise<boolean>
   setApiBase: (base: string) => void
-  createTask: (title: string, description: string, priority?: string) => Promise<boolean>
   updateTaskState: (taskId: string, newState: string) => Promise<boolean>
   fetchChatMessages: (channelId?: string, page?: number, size?: number) => Promise<void>
   sendChatMessage: (agentId: string, content: string, channelId?: string) => Promise<boolean>
@@ -402,30 +401,6 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Create task
-  createTask: async (title: string, description: string, priority: string = '中') => {
-    set({ loading: true })
-    try {
-      const apiBase = getApiBase()
-      const response = await fetch(`${apiBase}/create-task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, priority, description })
-      })
-      const data = await response.json()
-      set({ loading: false })
-      
-      if (data.ok) {
-        await get().fetchTasks()
-      }
-      
-      return data.ok === true
-    } catch (error) {
-      console.error('Create task error:', error)
-      set({ error: '创建任务失败', loading: false })
-      return false
-    }
-  },
   
   // Update task state
   updateTaskState: async (taskId: string, newState: string) => {
