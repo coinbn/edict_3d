@@ -126,13 +126,16 @@ export default function Overlay() {
 
 // 首页视图
 function HomeView() {
-  const { agents, executeTask, loading, fetchAgents, ui } = useStore()
+  const { agents, tasks, executeTask, loading, fetchAgents, fetchTasks, ui } = useStore()
   const [taskInput, setTaskInput] = useState("")
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
   const [gatewayStatus, setGatewayStatus] = useState<any>(null)
   const [systemInfo, setSystemInfo] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [pollingTaskId, setPollingTaskId] = useState<string | null>(
+    () => localStorage.getItem('pollingTaskId') // 持久化，恢复时读取
+  )
 
   const getApiBase = () => {
     return localStorage.getItem('apiBase') || 'http://localhost:8080/api'
@@ -159,14 +162,90 @@ function HomeView() {
   useEffect(() => {
     fetchSystemStatus()
     fetchAgents()
+    fetchTasks() // 页面加载时获取最新任务
   }, [])
+
+  // 页面加载时，检查是否有正在执行的任务，自动恢复轮询
+  useEffect(() => {
+    if (tasks.length === 0) return
+
+    // 如果已经有轮询中的任务，跳过
+    if (pollingTaskId) return
+
+    // 优先从 localStorage 恢复轮询
+    const savedTaskId = localStorage.getItem('pollingTaskId')
+    if (savedTaskId) {
+      const savedTask = tasks.find(t => t.id === savedTaskId)
+      if (savedTask && (savedTask.state === 'Doing' || savedTask.state === 'Review')) {
+        console.log('恢复轮询任务:', savedTaskId)
+        setPollingTaskId(savedTaskId)
+        setResult({
+          taskId: savedTaskId,
+          message: '继续跟踪任务进度'
+        })
+        return
+      } else {
+        // 任务已不在执行状态，清除缓存
+        localStorage.removeItem('pollingTaskId')
+      }
+    }
+
+    // 否则查找 Doing 或 Review 状态的任务
+    const executingTask = tasks.find(t =>
+      t.state === 'Doing' || t.state === 'Review'
+    )
+
+    if (executingTask) {
+      console.log('发现正在执行的任务:', executingTask.id)
+      setPollingTaskId(executingTask.id)
+      localStorage.setItem('pollingTaskId', executingTask.id)
+      setResult({
+        taskId: executingTask.id,
+        message: '继续跟踪任务进度'
+      })
+    }
+  }, [tasks.length]) // tasks 加载完成后检查
+
+  // 轮询任务状态
+  useEffect(() => {
+    if (!pollingTaskId) return
+
+    const pollInterval = setInterval(async () => {
+      await fetchTasks()
+    }, 3000) // 每3秒轮询
+
+    return () => clearInterval(pollInterval)
+  }, [pollingTaskId, fetchTasks])
+
+  // 监听任务完成，自动停止轮询
+  useEffect(() => {
+    if (!pollingTaskId) return
+
+    const currentTask = tasks.find(t => t.id === pollingTaskId)
+    if (currentTask && (currentTask.state === 'Done' || currentTask.state === 'Cancelled' || currentTask.state === 'Blocked')) {
+      // 任务已结束，停止轮询
+      setTimeout(() => {
+        setPollingTaskId(null)
+        localStorage.removeItem('pollingTaskId')
+        setResult(prev => ({ ...prev, message: '任务已完成' }))
+      }, 3000) // 3秒后停止
+    }
+  }, [tasks, pollingTaskId])
 
   const handleExecute = async () => {
     if (!taskInput.trim() && !selectedImage) return
-    
+
     // 调用 executeTask，传递图片数据
     const res = await executeTask(taskInput, selectedImage || undefined)
     setResult(res)
+
+    // 启动轮询
+    if (res.taskId) {
+      setPollingTaskId(res.taskId)
+      localStorage.setItem('pollingTaskId', res.taskId)
+      await fetchTasks()
+    }
+
     // 执行后清除图片
     setSelectedImage(null)
   }
@@ -279,19 +358,98 @@ function HomeView() {
         </div>
       </div>
       
-      {/* 结果展示 */}
+      {/* 结果展示 + 任务进度 */}
       {result && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           className="max-w-4xl mx-auto"
         >
-          <div className="glass rounded-2xl p-6">
-            <h3 className="text-lg text-white mb-4">执行结果</h3>
-            <pre className="text-sm text-white/70 whitespace-pre-wrap overflow-auto max-h-96">
-              {result.summary || result.error || JSON.stringify(result, null, 2)}
-            </pre>
+          {/* 提交成功提示 */}
+          <div className="glass rounded-2xl p-6 mb-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-2xl">📮</div>
+              <div>
+                <h3 className="text-lg text-white">{result.message || '已提交给太子处理'}</h3>
+                {result.taskId && (
+                  <p className="text-sm text-white/50">任务ID: {result.taskId}</p>
+                )}
+              </div>
+            </div>
+            {pollingTaskId && (
+              <p className="text-sm text-cyan-400 animate-pulse">⏳ 太子正在协调三省六部执行中，每3秒刷新进度...</p>
+            )}
           </div>
+
+          {/* 当前任务进度卡片 */}
+          {pollingTaskId && tasks.find(t => t.id === pollingTaskId) && (
+            <div className="glass rounded-2xl p-6 mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg text-white">📋 当前任务进度</h3>
+                <button
+                  onClick={() => {
+                    setPollingTaskId(null)
+                    localStorage.removeItem('pollingTaskId')
+                    setResult(null)
+                  }}
+                  className="text-xs text-white/40 hover:text-white"
+                >
+                  关闭
+                </button>
+              </div>
+              {(() => {
+                const currentTask = tasks.find(t => t.id === pollingTaskId)
+                if (!currentTask) return null
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-3 py-1 rounded-full text-sm ${
+                        currentTask.state === 'Done' ? 'bg-green-500/20 text-green-400' :
+                        currentTask.state === 'Doing' ? 'bg-yellow-500/20 text-yellow-400' :
+                        currentTask.state === 'Review' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {currentTask.state === 'ToDo' ? '⏳ 待开始' :
+                         currentTask.state === 'Doing' ? '⚙️ 执行中' :
+                         currentTask.state === 'Review' ? '🔍 审核中' :
+                         currentTask.state === 'Done' ? '✅ 已完成' :
+                         currentTask.state}
+                      </span>
+                      <span className="text-white/60 text-sm">{currentTask.title}</span>
+                    </div>
+                    {currentTask.now && (
+                      <p className="text-sm text-white/70">{currentTask.now}</p>
+                    )}
+                    {currentTask.flow && currentTask.flow.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-white/10">
+                        <p className="text-xs text-white/40 mb-2">流转记录</p>
+                        <div className="space-y-1">
+                          {currentTask.flow.slice(-3).map((entry: any, idx: number) => (
+                            <p key={idx} className="text-xs text-white/50">
+                              {entry.from} → {entry.to}: {entry.remark}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* 完成后停止轮询 */}
+                    {currentTask.state === 'Done' && (
+                      <p className="text-sm text-green-400 mt-3">🎉 任务已完成！太子已回奏皇上。</p>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* 如果没有对应任务，显示原始结果 */}
+          {pollingTaskId && !tasks.find(t => t.id === pollingTaskId) && (
+            <div className="glass rounded-2xl p-6">
+              <pre className="text-sm text-white/70 whitespace-pre-wrap overflow-auto max-h-96">
+                {result.summary || result.error || JSON.stringify(result, null, 2)}
+              </pre>
+            </div>
+          )}
         </motion.div>
       )}
       

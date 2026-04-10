@@ -23,7 +23,10 @@ export default function AgentCollabView() {
   } = useStore()
   // 内部状态用于缓存
   const [innerSelectedAgent, setInnerSelectedAgent] = useState<string | null>(null)
-  
+
+  // 每个 agent 独立的思考状态
+  const [agentThinking, setAgentThinking] = useState<Record<string, boolean>>({})
+
   // 优先使用全局 selectedAgent，其次使用内部缓存
   const selectedAgent = ui.selectedAgent?.id || innerSelectedAgent
   const [input, setInput] = useState('')
@@ -76,10 +79,17 @@ export default function AgentCollabView() {
     const message = input
     const targetAgent = selectedAgent || agents[0]?.id
     console.log('=== handleSend === selectedAgent:', selectedAgent, 'target:', targetAgent, 'channelId:', channelId)
-    
+
+    // 设置该 agent 为思考状态
+    setAgentThinking(prev => ({ ...prev, [targetAgent]: true }))
     setInput('')  // 先清空输入框
-    
-    await sendChatMessage(targetAgent, message, channelId)
+
+    try {
+      await sendChatMessage(targetAgent, message, channelId)
+    } finally {
+      // 无论成功失败，都停止思考状态
+      setAgentThinking(prev => ({ ...prev, [targetAgent]: false }))
+    }
   }
 
   const handleClear = async () => {
@@ -99,24 +109,13 @@ export default function AgentCollabView() {
       </div>
 
       {/* 左侧边栏 */}
-      <motion.div 
+      <motion.div
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         className="w-64 bg-gray-900/80 backdrop-blur-xl border-r border-gray-800 flex flex-col relative z-10"
       >
         <div className="p-4 border-b border-gray-800">
           <h2 className="text-lg font-bold text-white">Team</h2>
-          {/* 当前 Agent 思考状态 */}
-          {collabLoading && selectedAgent && (
-            <div className="mt-2 flex items-center gap-2 text-sm text-cyan-400">
-              <span className="inline-flex gap-1">
-                <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-              </span>
-              <span>正在思考...</span>
-            </div>
-          )}
         </div>
         
         <div className="flex-1 overflow-y-auto p-2 space-y-2">
@@ -144,19 +143,23 @@ export default function AgentCollabView() {
               />
               
               <div className="relative flex items-center gap-3">
-                <motion.span 
-                  className="text-2xl"
+                <motion.span
+                  className="text-2xl relative"
                   animate={hoveredAgent === agent.id ? { scale: 1.2 } : { scale: 1 }}
                   transition={{ type: 'spring', stiffness: 300 }}
                 >
                   {agent.emoji || '🤖'}
+                  {/* 思考中指示器 */}
+                  {agentThinking[agent.id] && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full animate-pulse" />
+                  )}
                 </motion.span>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{agent.label}</span>
                     {/* 状态标识 */}
                     <span className={`px-2 py-0.5 rounded-full text-xs ${
-                      agent.status === 'running' 
+                      agent.status === 'running'
                         ? 'bg-green-500/20 text-green-400'
                         : agent.status === 'offline'
                         ? 'bg-gray-500/20 text-gray-500'
@@ -257,11 +260,29 @@ export default function AgentCollabView() {
         </motion.div>
 
         {/* 输入框 */}
-        <motion.div 
+        <motion.div
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           className="p-4 border-t border-gray-800/50 bg-gray-900/50 backdrop-blur-xl relative z-10"
         >
+          {/* 当前选中 Agent 的思考状态 - 只显示当前选中的 */}
+          {agentThinking[selectedAgent || ''] && (
+            <div className="mb-3 flex items-center gap-3 p-3 rounded-xl bg-gray-800/50 backdrop-blur border border-cyan-500/30">
+              <span className="text-2xl">
+                {agents.find(a => a.id === selectedAgent)?.emoji || '🤖'}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                  <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                  <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                </span>
+                <span className="text-sm text-cyan-400">
+                  {agents.find(a => a.id === selectedAgent)?.label || selectedAgent} 正在思考...
+                </span>
+              </div>
+            </div>
+          )}
           {collabError && <div className="text-xs text-red-400 mb-2">{collabError}</div>}
           <div className="flex gap-3">
             <motion.input

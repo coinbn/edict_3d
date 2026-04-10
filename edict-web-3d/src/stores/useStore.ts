@@ -352,39 +352,26 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
       
-      // 纯文本任务，走原来的流程
+      // 纯文本任务，走 Workflow 三省六部流程
       const response = await fetch(`${apiBase}/task/execute`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ task, creator: '太子' })
       })
-      
+
       if (!response.ok) {
         throw new Error('Task execution failed')
       }
-      
+
       const data = await response.json()
-      const taskId = data.taskId
-      
-      // 太子逻辑：调用中书省 Agent 处理任务
-      const message = `📋 太子·旨意传达 任务ID: ${taskId} 任务内容: ${task} 请开始处理任务并汇报结果。`
-      
-      await fetch(`${apiBase}/agent-message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          agentId: 'zhongshu',
-          message: message
-        })
-      })
-      
+
       // 刷新任务列表
       get().fetchTasks()
-      
+
       set({ loading: false })
-      return { ...data, message: '已转交中书省处理' }
+      return { ...data, message: '已提交给太子处理' }
     } catch (error) {
       console.error('Execute task error:', error)
       set({ error: '任务执行失败', loading: false })

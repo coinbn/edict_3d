@@ -11,244 +11,155 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
- * Workflow 服务 - 使用 OpenClaw CLI 执行 Agent
+ * Workflow 服务 - 太子协调模式
+ *
+ * 不同于之前的同步调用链，现在只调用 taizi agent，
+ * 由 taizi 自己通过 OpenClaw CLI 调用其他 agent，完成三省六部流程。
  */
 @Service
 @Slf4j
 public class WorkflowService {
-    
+
     private final EdictTaskRepository taskRepository;
     private final EdictTaskService taskService;
     private final OpenClawProperties openClawProperties;
-    
-    public WorkflowService(EdictTaskRepository taskRepository, 
+
+    public WorkflowService(EdictTaskRepository taskRepository,
                           @Lazy EdictTaskService taskService,
                           OpenClawProperties openClawProperties) {
         this.taskRepository = taskRepository;
         this.taskService = taskService;
         this.openClawProperties = openClawProperties;
     }
-    
+
     /**
-     * 启动 Workflow - 异步执行三省六部流程
-     * 使用 OpenClaw CLI 调用 Agent
+     * 启动 Workflow - 太子协调模式
+     *
+     * 只调用 taizi agent，由 taizi 自己协调中书省、门下省、尚书省、六部完成执行。
+     * taizi 会通过 OpenClaw CLI 调用其他 agent，并通过 kanban_update.py 更新任务进度。
      */
     @Async("workflowExecutor")
     public void startWorkflow(String taskId) {
-        log.info("🚀 启动 Workflow for task: {}", taskId);
-        
+        log.info("🚀 启动 Workflow (太子协调模式) for task: {}", taskId);
+
         try {
             // 获取任务详情
             EdictTask task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found: " + taskId));
-            
+
             String taskContent = task.getTitle();
             if (task.getDescription() != null) {
                 taskContent = taskContent + "\n" + task.getDescription();
             }
-            
-            // ========== 阶段 1: 太子分拣 ==========
+
+            // ========== 太子分拣 ==========
             log.info("Task {}: 太子分拣", taskId);
-            taskService.addProgress(taskId, "太子", "📋 太子分拣完成，转交中书省");
-            taskService.transitionTask(taskId, "Doing", "太子", "转交中书省起草");
-            
-            // ========== 阶段 2: 中书省起草 ==========
-            log.info("Task {}: 中书省起草", taskId);
-            taskService.addProgress(taskId, "中书省", "📝 中书省正在起草方案...");
-            
+            taskService.addProgress(taskId, "太子", "📋 太子分拣完成，开始协调三省六部");
+            taskService.transitionTask(taskId, "Doing", "太子", "太子开始协调");
+
             if (openClawProperties.isEnabled()) {
-                String zhongshuTask = buildAgentTask("中书省", taskId, taskContent, 
-                    "请根据皇上旨意，起草详细执行方案。完成后请返回方案要点。");
-                
-                OpenClawCli.CliResult zhongshuResult = OpenClawCli.execute(
-                    "zhongshu", zhongshuTask, openClawProperties.getSubagentTimeout());
-                
-                if (!zhongshuResult.isSuccess()) {
-                    throw new RuntimeException("中书省起草失败: " + zhongshuResult.getError());
+                // ========== 调用太子 Agent ==========
+                // 给 taizi 足够详细的指令，让它自己协调后续流程
+                String taiziTask = buildTaiziTask(taskId, taskContent);
+
+                log.info("Task {}: 调用太子协调", taskId);
+                taskService.addProgress(taskId, "太子", "📜 太子正在协调中书省、门下省、尚书省...");
+
+                OpenClawCli.CliResult taiziResult = OpenClawCli.execute(
+                    "taizi", taiziTask, openClawProperties.getSubagentTimeout());
+
+                if (!taiziResult.isSuccess()) {
+                    throw new RuntimeException("太子协调失败: " + taiziResult.getError());
                 }
-                
-                // 保存中书省输出
-                saveAgentOutput(taskId, "中书省", zhongshuResult.getOutput());
-            }
-            
-            // ========== 阶段 3: 门下省审议 ==========
-            log.info("Task {}: 门下省审议", taskId);
-            taskService.transitionTask(taskId, "Review", "中书省", "提交门下省审议");
-            taskService.addProgress(taskId, "门下省", "🔍 门下省正在审议...");
-            
-            if (openClawProperties.isEnabled()) {
-                String menxiaTask = buildAgentTask("门下省", taskId, taskContent,
-                    "请审议中书省起草的方案，决定是否准奏。返回审议意见。");
-                
-                OpenClawCli.CliResult menxiaResult = OpenClawCli.execute(
-                    "menxia", menxiaTask, openClawProperties.getSubagentTimeout());
-                
-                if (!menxiaResult.isSuccess()) {
-                    throw new RuntimeException("门下省审议失败: " + menxiaResult.getError());
-                }
-                
-                saveAgentOutput(taskId, "门下省", menxiaResult.getOutput());
-            }
-            
-            // ========== 阶段 4: 尚书省派发 ==========
-            log.info("Task {}: 尚书省派发", taskId);
-            taskService.addProgress(taskId, "尚书省", "📮 尚书省正在派发任务...");
-            
-            if (openClawProperties.isEnabled()) {
-                String shangshuTask = buildAgentTask("尚书省", taskId, taskContent,
-                    "请将任务派发给合适的六部执行。返回派发结果。");
-                
-                OpenClawCli.CliResult shangshuResult = OpenClawCli.execute(
-                    "shangshu", shangshuTask, openClawProperties.getSubagentTimeout());
-                
-                if (!shangshuResult.isSuccess()) {
-                    log.warn("尚书省派发返回警告: {}", shangshuResult.getError());
-                }
-                
-                saveAgentOutput(taskId, "尚书省", shangshuResult.getOutput());
-            }
-            
-            // ========== 阶段 5: 六部执行 ==========
-            log.info("Task {}: 六部执行", taskId);
-            taskService.addProgress(taskId, "尚书省", "⚙️ 六部正在执行任务...");
-            
-            // 根据任务内容选择部门
-            String deptAgent = selectDepartmentAgent(taskContent);
-            log.info("Task {}: 派发给 {} 执行", taskId, deptAgent);
-            
-            if (openClawProperties.isEnabled()) {
-                String deptTask = buildAgentTask(deptAgent, taskId, taskContent,
-                    "请执行具体任务，完成后返回执行结果。");
-                
-                long startTime = System.currentTimeMillis();
-                OpenClawCli.CliResult deptResult = OpenClawCli.execute(
-                    deptAgent, deptTask, openClawProperties.getSubagentTimeout());
-                long executionTime = System.currentTimeMillis() - startTime;
-                
-                // 存储执行结果
-                if (deptResult.isSuccess()) {
-                    saveFinalResult(taskId, deptAgent, deptResult.getOutput(), executionTime);
-                } else {
-                    saveFinalResult(taskId, deptAgent, "执行失败: " + deptResult.getError(), executionTime);
-                    throw new RuntimeException(deptAgent + "执行失败: " + deptResult.getError());
-                }
+
+                // 保存太子协调结果
+                saveAgentOutput(taskId, "太子", taiziResult.getOutput());
+                log.info("Task {}: 太子协调完成", taskId);
             } else {
                 // 模拟模式
-                simulateCompletion(taskId, deptAgent);
+                simulateTaiziCoordination(taskId);
             }
-            
+
             log.info("✅ Workflow completed for task: {}", taskId);
-            
+
         } catch (Exception e) {
             log.error("❌ Workflow failed for task: " + taskId, e);
             try {
-                taskService.transitionTask(taskId, "Blocked", "系统", 
+                taskService.transitionTask(taskId, "Blocked", "系统",
                     "Workflow 执行失败: " + e.getMessage());
             } catch (Exception ex) {
                 log.error("Failed to mark task as failed", ex);
             }
         }
     }
-    
+
     /**
-     * 构建 Agent 任务内容
+     * 构建太子协调任务
+     *
+     * 给 taizi agent 完整的任务信息和协调指令，
+     * 让 taizi 自己通过 OpenClaw CLI 调用其他 agent。
      */
-    private String buildAgentTask(String agentName, String taskId, String originalTask, String instruction) {
-        return String.format(
-            "📋 %s·任务执行\n" +
-            "任务ID: %s\n" +
-            "皇上原话: %s\n" +
-            "\n执行要求:\n%s",
-            agentName, taskId, originalTask, instruction
-        );
+    private String buildTaiziTask(String taskId, String taskContent) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是太子，负责协调三省六部完成皇上的旨意。\n\n");
+        sb.append("任务ID: ").append(taskId).append("\n");
+        sb.append("皇上旨意: ").append(taskContent).append("\n\n");
+        sb.append("你的职责：\n");
+        sb.append("1. 分析任务内容，判断类型（开发/文档/数据/部署/安全等）\n");
+        sb.append("2. 通过 OpenClaw CLI 调用 agent 执行：\n");
+        sb.append("   - 中书省(zhongshu)：起草执行方案\n");
+        sb.append("   - 门下省(menxia)：审议方案\n");
+        sb.append("   - 尚书省(shangshu)：派发任务到六部\n");
+        sb.append("   - 六部(bingbu/hubu/libu/gongbu/xingbu)：执行具体任务\n\n");
+        sb.append("执行方式：\n");
+        sb.append("- 使用命令: openclaw agent --agent <agentId> --timeout 300 -m \"<任务内容>\"\n");
+        sb.append("- 例如: openclaw agent --agent zhongshu --timeout 300 -m \"任务ID: ").append(taskId).append("，请起草方案\"\n\n");
+        sb.append("任务完成后：\n");
+        sb.append("1. 通过 Python 脚本更新任务进度：\n");
+        sb.append("   python C:\\Users\\admin\\.openclaw\\workspacePa\\taizi\\scripts\\kanban_update.py progress ").append(taskId).append(" <进度说明> <计划>\n\n");
+        sb.append("2. 最终通过以下命令完成任务：\n");
+        sb.append("   python C:\\Users\\admin\\.openclaw\\workspacePa\\taizi\\scripts\\kanban_update.py done ").append(taskId).append(" <输出> <摘要>\n\n");
+        sb.append("注意事项：\n");
+        sb.append("- 根据任务类型选择合适的六部执行\n");
+        sb.append("- 保持流程记录，让皇上能追踪任务进度\n");
+        sb.append("- 如果某环节失败，记录错误并汇报\n");
+        return sb.toString();
     }
-    
+
     /**
-     * 选择执行的部门 Agent
-     */
-    private String selectDepartmentAgent(String taskContent) {
-        String content = taskContent.toLowerCase();
-        
-        // 兵部：代码、技术、开发
-        if (content.contains("代码") || content.contains("开发") || content.contains("技术") ||
-            content.contains("api") || content.contains("接口")) {
-            return "bingbu";
-        }
-        
-        // 户部：数据、分析、报告
-        if (content.contains("数据") || content.contains("分析") || content.contains("报表") ||
-            content.contains("统计")) {
-            return "hubu";
-        }
-        
-        // 礼部：文档、文章、内容
-        if (content.contains("文档") || content.contains("文章") || content.contains("内容") ||
-            content.contains("博客")) {
-            return "libu";
-        }
-        
-        // 工部：部署、运维、配置
-        if (content.contains("部署") || content.contains("运维") || content.contains("docker") ||
-            content.contains("k8s")) {
-            return "gongbu";
-        }
-        
-        // 刑部：安全、审查、审计
-        if (content.contains("安全") || content.contains("审查") || content.contains("漏洞")) {
-            return "xingbu";
-        }
-        
-        // 默认礼部
-        return "libu";
-    }
-    
-    /**
-     * 保存 Agent 中间输出
+     * 保存 Agent 输出
      */
     private void saveAgentOutput(String taskId, String agentName, String output) {
         if (output == null) return;
-        
-        // 截断过长的输出
-        String summary = output.length() > 200 
-            ? output.substring(0, 200) + "..." 
+
+        String summary = output.length() > 200
+            ? output.substring(0, 200) + "..."
             : output;
-        
+
         taskService.addProgress(taskId, agentName, summary.replace("\n", " "));
         log.debug("Task {}: {} output saved ({} chars)", taskId, agentName, output.length());
     }
-    
+
     /**
-     * 保存最终结果
+     * 模拟太子协调完成（当 OpenClaw 禁用时）
      */
-    private void saveFinalResult(String taskId, String agentName, String output, long executionTimeMs) {
-        StringBuilder result = new StringBuilder();
-        result.append("## 执行结果\n\n");
-        result.append("**执行Agent：** ").append(agentName).append("\n\n");
-        result.append("**执行状态：** ").append(output.contains("失败") ? "failed" : "success").append("\n\n");
-        result.append("**执行耗时：** ").append(executionTimeMs / 1000).append(" 秒\n\n");
-        result.append("**结果摘要：** ").append(output.substring(0, Math.min(100, output.length()))).append("\n\n");
-        result.append("**详细结果：**\n").append(output);
-        
-        taskService.completeTask(taskId, result.toString(), "✅ " + agentName + "执行完成");
-        log.info("Task {}: Final result saved", taskId);
-    }
-    
-    /**
-     * 模拟完成（当 OpenClaw 禁用时）
-     */
-    private void simulateCompletion(String taskId, String deptAgent) {
-        StringBuilder output = new StringBuilder();
-        output.append("## 执行结果\n\n");
-        output.append("**执行Agent：** ").append(deptAgent).append("\n\n");
-        output.append("**执行状态：** success\n\n");
-        output.append("**结果摘要：** Workflow 模拟执行完成\n\n");
-        output.append("**详细结果：**\n");
-        output.append("1. 太子分拣完成\n");
-        output.append("2. 中书省起草方案\n");
-        output.append("3. 门下省审议通过\n");
-        output.append("4. 尚书省派发任务\n");
-        output.append("5. ").append(deptAgent).append("执行完成\n");
-        
-        taskService.completeTask(taskId, output.toString(), "✅ Workflow 执行完成");
+    private void simulateTaiziCoordination(String taskId) {
+        taskService.addProgress(taskId, "太子", "📜 太子协调中书省起草方案...");
+        taskService.addProgress(taskId, "中书省", "📝 方案已起草，提交门下省审议...");
+        taskService.addProgress(taskId, "门下省", "🔍 审议通过，提交尚书省派发...");
+        taskService.addProgress(taskId, "尚书省", "📮 任务已派发，执行中...");
+        taskService.addProgress(taskId, "礼部", "✅ 任务执行完成");
+
+        String output = "## 模拟执行结果\n\n" +
+            "**太子协调模拟执行完成**\n\n" +
+            "流程：\n" +
+            "1. 太子分拣任务\n" +
+            "2. 中书省起草方案\n" +
+            "3. 门下省审议通过\n" +
+            "4. 尚书省派发任务\n" +
+            "5. 六部执行完成\n\n" +
+            "（OpenClaw 已禁用，使用模拟模式）";
+
+        taskService.completeTask(taskId, output, "✅ Workflow 模拟执行完成");
     }
 }

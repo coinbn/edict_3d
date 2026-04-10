@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -22,74 +23,138 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class AgentService {
-    
+
     private final AgentRepository agentRepository;
     private final AgentSkillRepository skillRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
+
+    // OpenClaw 配置文件路径
+    private static final String OPENCLAW_CONFIG_PATH = "C:\\Users\\admin\\.openclaw\\openclaw.json";
+
     private static final DateTimeFormatter ISO_FORMATTER = 
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
     
     @Transactional(readOnly = true)
     public AgentConfigDTO getAgentConfig() {
         List<Agent> agents = agentRepository.findAllByOrderByLabelAsc();
-        
+
+        // 从 openclaw.json 获取真实模型配置
+        Map<String, String> realModels = getAgentModelsFromConfig();
+        String defaultModel = realModels.getOrDefault("_default", "kimi-coding/k2p5");
+        realModels.remove("_default");
+
         AgentConfigDTO dto = new AgentConfigDTO();
-        dto.setAgents(agents.stream().map(this::convertToAgentInfo).collect(Collectors.toList()));
-        
+        dto.setAgents(agents.stream().map(a -> {
+            AgentConfigDTO.AgentInfoDTO info = convertToAgentInfo(a);
+            // 优先使用 openclaw.json 中的真实模型
+            String realModel = realModels.get(a.getId());
+            if (realModel != null && !realModel.isEmpty()) {
+                info.setModel(realModel);
+            } else if (info.getModel() == null || info.getModel().isEmpty()) {
+                info.setModel(defaultModel);
+            }
+            return info;
+        }).collect(Collectors.toList()));
+
         // 预设的已知模型（与 OpenClaw 实际配置一致）
         dto.setKnownModels(Arrays.asList(
             createKnownModel("minimax-portal/MiniMax-M2.5", "MiniMax M2.5", "MiniMax"),
             createKnownModel("minimax-portal/MiniMax-M2.1", "MiniMax M2.1", "MiniMax"),
-            createKnownModel("kimi-k2.5", "Kimi K2.5", "Moonshot"),
-            createKnownModel("kimi-k2", "Kimi K2", "Moonshot"),
+            createKnownModel("kimi-coding/k2p5", "Kimi Coding K2.5", "Moonshot"),
+            createKnownModel("moonshot/kimi-k2.5", "Kimi K2.5", "Moonshot"),
             createKnownModel("gpt-4o", "GPT-4o", "OpenAI"),
             createKnownModel("gpt-4o-mini", "GPT-4o Mini", "OpenAI"),
             createKnownModel("claude-3-5-sonnet", "Claude 3.5 Sonnet", "Anthropic"),
             createKnownModel("claude-3-opus", "Claude 3 Opus", "Anthropic"),
             createKnownModel("glm-4", "GLM-4", "Zhipu")
         ));
-        
+
         return dto;
     }
-    
+
     /**
-     * 获取 Agent 状态（仅从数据库读取）
+     * 从 openclaw.json 读取 Agent 的真实模型配置
+     */
+    private Map<String, String> getAgentModelsFromConfig() {
+        Map<String, String> modelMap = new HashMap<>();
+        try {
+            File configFile = new File(OPENCLAW_CONFIG_PATH);
+            if (!configFile.exists()) {
+                log.warn("OpenClaw 配置文件不存在: {}", OPENCLAW_CONFIG_PATH);
+                return modelMap;
+            }
+
+            JsonNode root = objectMapper.readTree(configFile);
+            JsonNode agentsNode = root.path("agents").path("list");
+
+            if (agentsNode.isArray()) {
+                for (JsonNode agentNode : agentsNode) {
+                    String agentId = agentNode.path("id").asText(null);
+                    String model = agentNode.path("model").asText(null);
+                    if (agentId != null && model != null && !model.isEmpty()) {
+                        modelMap.put(agentId, model);
+                    }
+                }
+            }
+
+            // 获取默认模型
+            String defaultModel = root.path("agents").path("defaults").path("model").path("primary").asText(null);
+            if (defaultModel != null) {
+                modelMap.put("_default", defaultModel);
+            }
+
+            log.debug("从 openclaw.json 读取到 {} 个 Agent 模型配置", modelMap.size());
+        } catch (Exception e) {
+            log.error("读取 openclaw.json 失败: {}", e.getMessage());
+        }
+        return modelMap;
+    }
+
+    /**
+     * 获取 Agent 状态（从 openclaw.json 读取真实模型）
      */
     @Transactional(readOnly = true)
     public AgentsStatusDTO getAgentsStatus() {
         List<Agent> agents = agentRepository.findAll();
-        
+
+        // 从 openclaw.json 获取真实模型配置
+        Map<String, String> realModels = getAgentModelsFromConfig();
+        String defaultModel = realModels.getOrDefault("_default", "unknown");
+        realModels.remove("_default");
+
         AgentsStatusDTO dto = new AgentsStatusDTO();
         dto.setOk(true);
         dto.setCheckedAt(LocalDateTime.now().format(ISO_FORMATTER));
-        
+
         // Gateway status
         AgentsStatusDTO.GatewayStatusDTO gateway = new AgentsStatusDTO.GatewayStatusDTO();
         gateway.setAlive(true);
         gateway.setProbe(true);
         gateway.setStatus("healthy");
         dto.setGateway(gateway);
-        
-        // Agents status
+
+        // Agents status - 优先使用 openclaw.json 中的真实模型
         dto.setAgents(agents.stream().map(a -> {
             AgentsStatusDTO.AgentStatusInfoDTO info = new AgentsStatusDTO.AgentStatusInfoDTO();
             info.setId(a.getId());
             info.setLabel(a.getLabel());
             info.setEmoji(a.getEmoji());
             info.setRole(a.getRole());
-            info.setModel(a.getModel());
-            
+
+            // 优先使用 openclaw.json 中的真实模型，否则用数据库的，最后用默认值
+            String realModel = realModels.get(a.getId());
+            info.setModel(realModel != null ? realModel : (a.getModel() != null ? a.getModel() : defaultModel));
+
             Agent.AgentStatus realtimeStatus = calculateRealtimeStatus(a);
             info.setStatus(realtimeStatus.name());
             info.setStatusLabel(getStatusLabel(realtimeStatus));
-            
+
             info.setLastActive(a.getLastActive() != null ? a.getLastActive().format(ISO_FORMATTER) : null);
             info.setSessions(a.getSessions() != null ? a.getSessions() : 0);
             info.setMessages(a.getMessages() != null ? a.getMessages() : 0);
             return info;
         }).collect(Collectors.toList()));
-        
+
         return dto;
     }
 
