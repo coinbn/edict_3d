@@ -54,7 +54,7 @@ export interface DisplaySettings {
 }
 
 // UI 状态
-type ViewType = 'home' | 'edict' | 'stats' | 'morning' | 'messages' | 'agents' | 'skills' | 'logviewer' | 'settings'
+type ViewType = 'home' | 'edict' | 'stats' | 'morning' | 'messages' | 'agents' | 'skills' | 'logviewer' | 'settings' | 'image' | 'extensions' | 'display' | 'gateway' | 'services' | 'channels' | 'memory'
 
 interface UIState {
   activeView: ViewType

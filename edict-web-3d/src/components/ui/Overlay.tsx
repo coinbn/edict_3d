@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../../stores/useStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import EdictDashboard from './EdictDashboard'
@@ -16,14 +16,40 @@ import UsageStatsView from './UsageStatsView'
 import ImageRecognitionView from './ImageRecognitionView'
 import ExtensionsView from './ExtensionsView'
 
+// 设置子菜单配置
+const settingTabs = [
+  { key: 'image', label: '图片识别', icon: '🖼️' },
+  { key: 'extensions', label: '扩展工具', icon: '🔌' },
+  { key: 'display', label: '显示设置', icon: '🎨' },
+  { key: 'gateway', label: 'Gateway', icon: '🌐' },
+  { key: 'services', label: '服务管理', icon: '⚙️' },
+  { key: 'channels', label: '消息渠道', icon: '💬' },
+  { key: 'memory', label: '记忆管理', icon: '🧠' },
+]
+
 export default function Overlay() {
   const { agents, ui, fetchAgents, wakeAgent, executeTask, loading, syncAgents } = useStore()
-  
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // 加载时获取数据
   useEffect(() => {
     fetchAgents()
   }, [])
-  
+
+  const isSettingsView = settingTabs.some(t => t.key === ui.activeView)
+
+  const showSettings = () => {
+    if (settingsTimeoutRef.current) clearTimeout(settingsTimeoutRef.current)
+    setSettingsOpen(true)
+  }
+
+  const hideSettings = () => {
+    settingsTimeoutRef.current = setTimeout(() => {
+      setSettingsOpen(false)
+    }, 150)
+  }
+
   // 标签页配置
   const tabs = [
     { key: 'home', label: '首页', icon: '🏠' },
@@ -36,50 +62,109 @@ export default function Overlay() {
     { key: 'logviewer', label: '日志', icon: '📜' },
     { key: 'settings', label: '设置', icon: '🔧' },
   ]
-  
-  // 获取当前激活标签的索引
-  const activeIndex = tabs.findIndex(t => t.key === ui.activeView)
-  
+
+  // 获取当前激活标签的索引（设置子项也高亮设置按钮）
+  const activeIndex = tabs.findIndex(t => t.key === ui.activeView || (t.key === 'settings' && isSettingsView))
+
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* 顶部导航 - tabs-pro 风格 */}
-      <header className="pointer-events-auto flex items-center justify-between px-8 pt-4">
+      <header className="pointer-events-auto relative z-40 flex items-center justify-between px-8 pt-4">
         {/* Logo - Netflix Style Animated */}
         <NetflixLogo />
-        
+
         {/* 标签页导航 */}
-        <div className="rounded-2xl px-4 py-3 bg-gradient-to-r from-indigo-950 via-purple-950 to-cyan-950 border border-white/10 backdrop-blur-xl shadow-lg relative overflow-hidden animate-breathe">
+        <div className="rounded-2xl px-4 py-3 bg-gradient-to-r from-indigo-950 via-purple-950 to-cyan-950 border border-white/10 backdrop-blur-xl shadow-lg relative animate-breathe">
           {/* 顶部高光线条 */}
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent"></div>
-          
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent pointer-events-none"></div>
+
           {/* 标签页按钮容器 */}
           <div className="flex gap-2 relative">
             {/* 激活指示器 */}
-            <div 
-              className="absolute h-full rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 shadow-[0_4px_24px_rgba(34,211,238,0.4),0_0_48px_rgba(99,102,241,0.2)] transition-all duration-500 ease-out"
+            <div
+              className="absolute h-full rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 shadow-[0_4px_24px_rgba(34,211,238,0.4),0_0_48px_rgba(99,102,241,0.2)] transition-all duration-500 ease-out pointer-events-none"
               style={{
                 width: `${100 / tabs.length}%`,
                 transform: `translateX(${activeIndex * 100}%)`
               }}
             />
-            
-            {tabs.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => ui.setActiveView(item.key as any)}
-                className={`px-5 py-2 rounded-xl text-base font-semibold transition-all duration-300 relative z-10 flex items-center gap-2 whitespace-nowrap ${
-                  ui.activeView === item.key
-                    ? 'text-white'
-                    : 'text-white/50 hover:text-white/80'
-                }`}
-              >
-                <span className={ui.activeView === item.key ? 'scale-110' : ''}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+
+            {tabs.map((item) => {
+              if (item.key === 'settings') {
+                return (
+                  <div
+                    key={item.key}
+                    className="relative z-20"
+                    onMouseEnter={showSettings}
+                    onMouseLeave={hideSettings}
+                  >
+                    <button
+                      onClick={() => {
+                        ui.setActiveView('display')
+                        setSettingsOpen(true)
+                      }}
+                      className={`px-5 py-2 rounded-xl text-base font-semibold transition-all duration-300 relative z-10 flex items-center gap-2 whitespace-nowrap ${
+                        isSettingsView
+                          ? 'text-white'
+                          : 'text-white/50 hover:text-white/80'
+                      }`}
+                    >
+                      <span className={isSettingsView ? 'scale-110' : ''}>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+
+                    {/* hover submenu */}
+                    {settingsOpen && (
+                      <div
+                        className="absolute top-full left-1/2 -translate-x-1/2 pt-2 z-50"
+                        onMouseEnter={showSettings}
+                        onMouseLeave={hideSettings}
+                      >
+                        {/* invisible bridge to prevent mouseleave gap */}
+                        <div className="absolute -top-2 left-0 right-0 h-2" />
+                        <div className="rounded-xl bg-gradient-to-r from-indigo-950 via-purple-950 to-cyan-950 border border-white/10 backdrop-blur-xl shadow-lg p-2 min-w-[160px]">
+                          {settingTabs.map((sub) => (
+                            <button
+                              key={sub.key}
+                              onClick={() => {
+                                ui.setActiveView(sub.key as any)
+                                setSettingsOpen(false)
+                              }}
+                              className={`w-full text-left px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${
+                                ui.activeView === sub.key
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+                              }`}
+                            >
+                              <span>{sub.icon}</span>
+                              <span>{sub.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => ui.setActiveView(item.key as any)}
+                  className={`px-5 py-2 rounded-xl text-base font-semibold transition-all duration-300 relative z-10 flex items-center gap-2 whitespace-nowrap ${
+                    ui.activeView === item.key
+                      ? 'text-white'
+                      : 'text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  <span className={ui.activeView === item.key ? 'scale-110' : ''}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
-        
+
         {/* 右侧占位 */}
         <div className="w-24"></div>
       </header>
@@ -97,7 +182,7 @@ export default function Overlay() {
           {ui.activeView === 'tasks' && <TasksView key="tasks" />}
           {ui.activeView === 'skills' && <SkillsView key="skills" />}
           {ui.activeView === 'logviewer' && <LogViewerView key="logviewer" />}
-          {ui.activeView === 'settings' && <SettingsView key="settings" />}
+          {isSettingsView && <SettingsContent key={ui.activeView} activeTab={ui.activeView} />}
         </AnimatePresence>
       </main>
       
@@ -717,21 +802,10 @@ function TasksView() {
   )
 }
 
-// 设置视图
-function SettingsView() {
-  const [activeTab, setActiveTab] = useState('display')
-  
-  const settingTabs = [
-    { key: 'image', label: '图片识别', icon: '🖼️' },
-    { key: 'extensions', label: '扩展工具', icon: '🔌' },
-    { key: 'display', label: '显示设置', icon: '🎨' },
-    { key: 'gateway', label: 'Gateway', icon: '🌐' },
-    { key: 'services', label: '服务管理', icon: '⚙️' },
-    { key: 'channels', label: '消息渠道', icon: '💬' },
-    { key: 'logviewer', label: '日志查看', icon: '📜' },
-    { key: 'memory', label: '记忆管理', icon: '🧠' },
-  ]
-  
+// 设置视图内容
+function SettingsContent({ activeTab }: { activeTab: string }) {
+  const tabInfo = settingTabs.find(t => t.key === activeTab)
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -739,28 +813,10 @@ function SettingsView() {
       exit={{ opacity: 0, y: -20 }}
       className="h-full overflow-y-auto px-8 py-4"
     >
-      <div className="flex items-center gap-4 mb-4">
-        <h2 className="text-xl font-bold text-white">⚙️ 系统设置</h2>
-        
-        {/* 下拉菜单 */}
-        <div className="relative inline-block">
-          <select
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value)}
-            className="appearance-none bg-gradient-to-r from-indigo-950 via-purple-950 to-cyan-950 border border-white/20 rounded-lg px-4 py-2 pr-10 text-white text-sm font-medium cursor-pointer hover:border-cyan-500/50 focus:outline-none focus:border-cyan-500/50 transition-all shadow-lg min-w-[160px]"
-          >
-            {settingTabs.map(tab => (
-              <option key={tab.key} value={tab.key} className="bg-gray-900 py-2">
-                {tab.icon} {tab.label}
-              </option>
-            ))}
-          </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/60 text-sm">
-            ▼
-          </div>
-        </div>
+      <div className="flex items-center gap-4 mb-6">
+        <h2 className="text-xl font-bold text-white">⚙️ {tabInfo?.label || '系统设置'}</h2>
       </div>
-      
+
       <div className="max-w-3xl space-y-6">
           {activeTab === 'gateway' && (
             <div className="glass rounded-xl p-6">
@@ -788,7 +844,6 @@ function SettingsView() {
           {activeTab === 'image' && <ImageRecognitionView />}
           {activeTab === 'extensions' && <ExtensionsView />}
           {activeTab === 'channels' && <ChannelsView />}
-          {activeTab === 'logviewer' && <LogViewerView />}
           {activeTab === 'memory' && <MemoryView />}
       </div>
     </motion.div>

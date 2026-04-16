@@ -9,21 +9,37 @@ interface TerminalProps {
   initialLines?: string[]
 }
 
-export default function TerminalPanel({ 
-  wsUrl = 'ws://localhost:8080/api/terminal',
+export default function TerminalPanel({
+  wsUrl = 'ws://localhost:8080/terminal',
   initialLines = []
 }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerminal | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const fitAddonRef = useRef<FitAddon | null>(null)
   const [connected, setConnected] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const currentLineRef = useRef('')
+
+  // 获取 API 基础地址并构建 WebSocket URL
+  const getWsUrl = () => {
+    const apiBase = localStorage.getItem('apiBase') || 'http://localhost:8080/api'
+    // 如果用户设置了 apiBase，自动转换为对应的 WebSocket 地址
+    if (apiBase.startsWith('http://')) {
+      return apiBase.replace('http://', 'ws://') + '/terminal'
+    }
+    if (apiBase.startsWith('https://')) {
+      return apiBase.replace('https://', 'wss://') + '/terminal'
+    }
+    return wsUrl
+  }
 
   useEffect(() => {
     if (!terminalRef.current) return
 
-    // 检查容器是否有有效尺寸
     const container = terminalRef.current
     if (container.clientWidth === 0 || container.clientHeight === 0) {
-      // 延迟检查
       setTimeout(() => {
         if (terminalRef.current?.clientWidth) {
           initTerminal()
@@ -36,8 +52,7 @@ export default function TerminalPanel({
 
     function initTerminal() {
       if (!terminalRef.current) return
-      
-      // 创建 xterm 实例
+
       const term = new XTerminal({
         theme: {
           background: '#0a0a0f',
@@ -71,14 +86,12 @@ export default function TerminalPanel({
         allowTransparency: true,
       })
 
-      // 添加插件
       const fitAddon = new FitAddon()
       term.loadAddon(fitAddon)
       term.loadAddon(new WebLinksAddon())
 
       term.open(terminalRef.current)
-      
-      // 延迟 fit 确保 DOM 已渲染
+
       setTimeout(() => {
         try {
           fitAddon.fit()
@@ -88,53 +101,91 @@ export default function TerminalPanel({
       }, 100)
 
       xtermRef.current = term
+      fitAddonRef.current = fitAddon
 
       // 显示初始内容
-      term.writeln('\x1b[36m➜\x1b[0m \x1b[1;37mEdict Terminal (Mock Mode)\x1b[0m')
-      term.writeln('')
-      term.writeln('\x1b[33m⚠\x1b[0m Terminal server not connected')
-      term.writeln('\x1b[33m⚠\x1b[0m Running in mock mode - commands are simulated')
+      term.writeln('\x1b[36m➜\x1b[0m \x1b[1;37mEdict Terminal\x1b[0m')
       term.writeln('')
       initialLines.forEach((line) => term.writeln(line))
       term.writeln('')
-      
-      // 模拟本地输入处理
-      let currentLine = ''
+
+      // 本地输入处理：直接发送到 WebSocket
       term.onData((data) => {
         const code = data.charCodeAt(0)
         if (code === 13) { // Enter
           term.writeln('')
-          if (currentLine.trim()) {
-            term.writeln(`\x1b[32m$ \x1b[0m${currentLine}`)
-            term.writeln(`\x1b[90m(mock) Command executed: ${currentLine}\x1b[0m`)
+          const line = currentLineRef.current
+          if (line.trim() && wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(line + '\n')
           }
-          currentLine = ''
-          term.write('\x1b[32m$ \x1b[0m')
+          currentLineRef.current = ''
         } else if (code === 127 || code === 8) { // Backspace
-          if (currentLine.length > 0) {
-            currentLine = currentLine.slice(0, -1)
+          if (currentLineRef.current.length > 0) {
+            currentLineRef.current = currentLineRef.current.slice(0, -1)
             term.write('\b \b')
           }
         } else if (code >= 32) { // Printable characters
-          currentLine += data
+          currentLineRef.current += data
           term.write(data)
         }
       })
 
-      term.write('\x1b[32m$ \x1b[0m')
-      setConnected(false)
+      connectWebSocket(term)
     }
 
-    // 监听 resize
+    function connectWebSocket(term: XTerminal) {
+      const url = getWsUrl()
+      term.writeln(`\x1b[90mConnecting to ${url}...\x1b[0m`)
+
+      try {
+        const ws = new WebSocket(url)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+          setConnected(true)
+          setErrorMsg(null)
+          term.writeln('\x1b[32m✓ Terminal connected\x1b[0m')
+          term.writeln('')
+          // 连接后后端会自动启动 npm run dev，不需要发送命令
+        }
+
+        ws.onmessage = (event) => {
+          term.write(event.data)
+        }
+
+        ws.onerror = (err) => {
+          setConnected(false)
+          setErrorMsg('WebSocket error')
+          term.writeln('\x1b[31m✗ Connection error\x1b[0m')
+          console.error('Terminal WebSocket error:', err)
+        }
+
+        ws.onclose = () => {
+          setConnected(false)
+          term.writeln('\x1b[33m⚠ Terminal disconnected\x1b[0m')
+
+          // 3秒后自动重连
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current)
+          }
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (xtermRef.current) {
+              xtermRef.current.writeln('\x1b[90mReconnecting...\x1b[0m')
+              connectWebSocket(xtermRef.current)
+            }
+          }, 3000)
+        }
+      } catch (e) {
+        setConnected(false)
+        setErrorMsg(String(e))
+        term.writeln(`\x1b[31m✗ Failed to connect: ${e}\x1b[0m`)
+      }
+    }
+
     const handleResize = () => {
       try {
-        if (xtermRef.current) {
-          const fitAddon = xtermRef.current.loadedAddons?.find(
-            (a): a is FitAddon => (a as any).fit?.()
-          )
-          if (fitAddon) {
-            (fitAddon as any).fit()
-          }
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit()
         }
       } catch (e) {
         // 忽略 resize 错误
@@ -144,10 +195,18 @@ export default function TerminalPanel({
 
     return () => {
       window.removeEventListener('resize', handleResize)
-      try {
-        term.dispose()
-      } catch (e) {
-        // 忽略 dispose 错误
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+      if (xtermRef.current) {
+        try {
+          xtermRef.current.dispose()
+        } catch (e) {
+          // 忽略 dispose 错误
+        }
       }
     }
   }, [])
@@ -156,13 +215,8 @@ export default function TerminalPanel({
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       try {
-        if (xtermRef.current && terminalRef.current?.clientWidth) {
-          const fitAddon = xtermRef.current.loadedAddons?.find(
-            (a): a is FitAddon => (a as any).fit?.()
-          )
-          if (fitAddon) {
-            (fitAddon as any).fit()
-          }
+        if (fitAddonRef.current && terminalRef.current?.clientWidth) {
+          fitAddonRef.current.fit()
         }
       } catch (e) {
         // 忽略错误
@@ -185,14 +239,16 @@ export default function TerminalPanel({
           <span className="text-xs text-white/40 ml-2">npm run dev</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
-          <span className="text-xs text-white/40">{connected ? 'Connected' : 'Mock Mode'}</span>
+          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : errorMsg ? 'bg-red-500' : 'bg-yellow-500'}`} />
+          <span className="text-xs text-white/40">
+            {connected ? 'Connected' : errorMsg ? 'Error' : 'Connecting...'}
+          </span>
         </div>
       </div>
 
       {/* 终端内容 */}
-      <div 
-        ref={terminalRef} 
+      <div
+        ref={terminalRef}
         className="flex-1 p-2 overflow-hidden"
         style={{ minHeight: 0 }}
       />

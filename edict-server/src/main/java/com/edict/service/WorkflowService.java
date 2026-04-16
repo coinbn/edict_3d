@@ -107,14 +107,30 @@ public class WorkflowService {
      * 保存 Agent 输出
      */
     private void saveAgentOutput(String taskId, String agentName, String output) {
-        if (output == null) return;
+        if (output == null || output.isEmpty()) return;
 
-        String summary = output.length() > 200
-            ? output.substring(0, 200) + "..."
-            : output;
+        // 过滤掉 Config warnings 和 plugin 信息
+        String[] lines = output.split("\n");
+        StringBuilder meaningfulOutput = new StringBuilder();
+        for (String line : lines) {
+            if (!line.startsWith("Config warnings:") &&
+                !line.startsWith("- plugins.") &&
+                !line.startsWith("  - ") &&
+                !line.startsWith("  plugin") &&
+                !line.trim().isEmpty()) {
+                meaningfulOutput.append(line).append(" ");
+            }
+        }
+
+        String summary = meaningfulOutput.toString().trim();
+        if (summary.isEmpty()) return;
+
+        if (summary.length() > 200) {
+            summary = summary.substring(0, 200) + "...";
+        }
 
         taskService.addProgress(taskId, agentName, summary.replace("\n", " "));
-        log.debug("Task {}: {} output saved ({} chars)", taskId, agentName, output.length());
+        log.debug("Task {}: {} output saved ({} chars)", taskId, agentName, summary.length());
     }
 
     /**

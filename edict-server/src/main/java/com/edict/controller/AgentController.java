@@ -59,7 +59,12 @@ public class AgentController {
     public ActionResultDTO syncAgents() {
         return agentService.syncAgentsFromOpenClaw();
     }
-    
+
+    @PostMapping("/sync-sessions")
+    public Map<String, Object> syncSessions() {
+        return agentService.syncSessionsFromOpenClaw();
+    }
+
     /**
      * 向 Agent 发送消息并触发执行
      * POST /api/agent-message

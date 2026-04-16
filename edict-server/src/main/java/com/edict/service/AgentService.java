@@ -160,47 +160,59 @@ public class AgentService {
 
     
     /**
+     *
+     *
+     *
+     *
      * 从 OpenClaw 同步会话数据到数据库
      */
-    private void syncSessionsFromOpenClaw() {
+    public Map<String, Object> syncSessionsFromOpenClaw() {
+        Map<String, Object> resultMap = new HashMap<>();
         try {
             OpenClawCli.CliResult result = OpenClawCli.getSessionsList();
             if (!result.isSuccess()) {
                 log.warn("获取 OpenClaw 会话列表失败: {}", result.getError());
-                return;
+                resultMap.put("ok", false);
+                resultMap.put("error", result.getError());
+                return resultMap;
             }
-            
+
             String output = result.getOutput();
             if (output == null || output.trim().isEmpty()) {
                 log.warn("OpenClaw 会话列表为空");
-                return;
+                resultMap.put("ok", true);
+                resultMap.put("message", "OpenClaw 会话列表为空");
+                resultMap.put("updated", 0);
+                return resultMap;
             }
-            
+
             // 解析 JSON 输出
             JsonNode rootNode = objectMapper.readTree(output);
             JsonNode sessionsNode = rootNode.get("sessions");
-            
+
             if (sessionsNode == null || !sessionsNode.isArray()) {
                 log.warn("OpenClaw 会话列表格式不正确");
-                return;
+                resultMap.put("ok", false);
+                resultMap.put("error", "OpenClaw 会话列表格式不正确");
+                return resultMap;
             }
-            
+
             // 统计每个 Agent 的会话数和消息数
             Map<String, Integer> agentSessionCount = new HashMap<>();
             Map<String, Integer> agentMessageCount = new HashMap<>();
             Map<String, LocalDateTime> agentLastActive = new HashMap<>();
-            
+
             for (JsonNode session : sessionsNode) {
                 String agentId = session.has("agentId") ? session.get("agentId").asText() : null;
                 if (agentId == null) continue;
-                
+
                 // 统计会话数
                 agentSessionCount.merge(agentId, 1, Integer::sum);
-                
+
                 // 统计消息数
                 int messageCount = session.has("messageCount") ? session.get("messageCount").asInt() : 0;
                 agentMessageCount.merge(agentId, messageCount, Integer::sum);
-                
+
                 // 最后活跃时间
                 if (session.has("lastActivity")) {
                     String lastActivity = session.get("lastActivity").asText();
@@ -212,25 +224,26 @@ public class AgentService {
                     }
                 }
             }
-            
+
             // 更新数据库
             List<Agent> agents = agentRepository.findAll();
+            int updatedCount = 0;
             for (Agent agent : agents) {
                 String agentId = agent.getId();
                 boolean updated = false;
-                
+
                 Integer sessions = agentSessionCount.get(agentId);
                 if (sessions != null) {
                     agent.setSessions(sessions);
                     updated = true;
                 }
-                
+
                 Integer messages = agentMessageCount.get(agentId);
                 if (messages != null) {
                     agent.setMessages(messages);
                     updated = true;
                 }
-                
+
                 LocalDateTime lastActive = agentLastActive.get(agentId);
                 if (lastActive != null) {
                     if (agent.getLastActive() == null || lastActive.isAfter(agent.getLastActive())) {
@@ -238,17 +251,25 @@ public class AgentService {
                         updated = true;
                     }
                 }
-                
+
                 if (updated) {
                     agentRepository.save(agent);
+                    updatedCount++;
                 }
             }
-            
-            log.info("同步 OpenClaw 会话数据完成: {} 个 Agent 更新", 
-                agents.stream().filter(a -> agentSessionCount.containsKey(a.getId())).count());
-            
+
+            log.info("同步 OpenClaw 会话数据完成: {} 个 Agent 更新", updatedCount);
+            resultMap.put("ok", true);
+            resultMap.put("message", "同步成功");
+            resultMap.put("updated", updatedCount);
+            resultMap.put("checkedAt", LocalDateTime.now().format(ISO_FORMATTER));
+            return resultMap;
+
         } catch (Exception e) {
             log.error("同步 OpenClaw 会话数据失败: {}", e.getMessage());
+            resultMap.put("ok", false);
+            resultMap.put("error", e.getMessage());
+            return resultMap;
         }
     }
     

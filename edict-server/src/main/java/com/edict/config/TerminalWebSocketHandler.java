@@ -34,7 +34,14 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
         String sessionId = session.getId();
 
         try {
-            List<String> commandParts = Arrays.asList(command.trim().split("\\s+"));
+            List<String> commandParts;
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("win")) {
+                // Windows 下需要通过 cmd /c 执行 npm 等命令
+                commandParts = Arrays.asList("cmd", "/c", command.trim());
+            } else {
+                commandParts = Arrays.asList(command.trim().split("\\s+"));
+            }
             ProcessBuilder pb = new ProcessBuilder(commandParts);
             pb.directory(new java.io.File(workingDir));
             pb.redirectErrorStream(true);
